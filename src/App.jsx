@@ -1483,14 +1483,14 @@ function SummaryScreen({
         />
         <ActionRow
           icon={<Copy size={18} />}
-          label={copied ? 'Kopierat!' : 'Kopiera datum'}
-          sublabel="Välj månad eller hela året"
+          label={copied ? 'Kopierat!' : 'Kopiera text'}
+          sublabel="Kopierar VAB-underlag som text till urklipp"
           onClick={() => setPickerAction('copy')}
         />
         <ActionRow
           icon={<Download size={18} />}
           label="Spara som PDF"
-          sublabel="Välj månad eller hela året"
+          sublabel="Skapar ett PDF-dokument med dina VAB-dagar"
           onClick={() => setPickerAction('pdf')}
         />
         {canMark && (
@@ -1570,7 +1570,12 @@ function SummaryScreen({
 
       {pickerAction && (
         <PeriodPickerModal
-          title={pickerAction === 'copy' ? 'Kopiera datum' : 'Spara som PDF'}
+          title={pickerAction === 'copy' ? 'Kopiera text' : 'Spara som PDF'}
+          description={
+            pickerAction === 'copy'
+              ? 'Ditt VAB-underlag kopieras som text till urklipp – klistra sedan in i t.ex. ett mejl eller din ansökan hos FK.'
+              : 'Ett PDF-dokument skapas med dina registrerade VAB-dagar. Du kan sedan spara eller skriva ut det.'
+          }
           year={thisYear}
           monthsWithEntries={monthsWithEntries}
           onPick={handlePickerSelect}
@@ -1581,7 +1586,7 @@ function SummaryScreen({
   );
 }
 
-function PeriodPickerModal({ title, year, monthsWithEntries, onPick, onClose }) {
+function PeriodPickerModal({ title, description, year, monthsWithEntries, onPick, onClose }) {
   return (
     <div
       onClick={onClose}
@@ -1611,6 +1616,15 @@ function PeriodPickerModal({ title, year, monthsWithEntries, onPick, onClose }) 
             color: C.textMuted, fontSize: 20, lineHeight: 1,
           }} aria-label="Stäng">×</button>
         </div>
+        {description && (
+          <div style={{
+            fontSize: 12, color: C.text, opacity: 0.75, lineHeight: 1.55,
+            marginBottom: 12, padding: '10px 12px',
+            background: C.primarySoft, borderRadius: 10,
+          }}>
+            {description}
+          </div>
+        )}
         <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 10 }}>
           Välj period för {year}
         </div>
