@@ -1102,7 +1102,7 @@ function SummaryScreen({ children, entries, totalDays, getDaysUsed, onEdit }) {
     const blocks = children.map(c => {
       const childRows = sorted.filter(e => e.child_id === c.id);
       if (childRows.length === 0) return null;
-      const totalDays = childRows.reduce((sum, e) => sum + (e.extent / 8), 0);
+      const totalDays = childRows.reduce((sum, e) => sum + e.extent, 0);
       const lines = childRows.map(e =>
         `  ${e.date}  ${extentLabel(e.extent)}`
       );
