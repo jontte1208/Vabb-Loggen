@@ -3,6 +3,7 @@ import {
   Plus, Home as HomeIcon, Calendar, FileText, ArrowLeft, Check,
   TrendingUp, Download, BarChart3, ArrowRight, Battery, Trash2,
   AlertTriangle, Clock, Settings, Bell, BellOff, UserPlus, Users,
+  Copy, ExternalLink,
 } from 'lucide-react';
 import {
   C, FONT_DISPLAY, FONT_SANS, REASONS, MONTH_LONG, MONTH_SHORT, DAY_NAMES,
@@ -1094,6 +1095,23 @@ function SummaryScreen({ children, entries, totalDays, getDaysUsed, onEdit }) {
     .sort((a,b) => b.date.localeCompare(a.date));
 
   const lateCount = entries.filter(e => deadlineStatus(e.date).status === 'late').length;
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopyDates() {
+    const sorted = [...entriesThisYear].sort((a,b) => a.date.localeCompare(b.date));
+    const lines = sorted.map(e => {
+      const c = children.find(x => x.id === e.child_id);
+      return `${e.date}  ${extentLabel(e.extent)}  ${c?.name ?? ''}`.trim();
+    });
+    const text = lines.join('\n') || 'Inga registreringar i år.';
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   return (
     <div style={{ padding: '8px 22px 24px' }}>
@@ -1162,17 +1180,36 @@ function SummaryScreen({ children, entries, totalDays, getDaysUsed, onEdit }) {
 
       <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <ActionRow
-          icon={<Download size={18} />}
-          label="Exportera PDF"
-          sublabel="Öppna utskrift → Spara som PDF"
-          onClick={() => window.print()}
+          icon={<ExternalLink size={18} />}
+          label="Ansök hos Försäkringskassan"
+          sublabel="Öppnar Mina sidor (BankID)"
+          onClick={() => window.open('https://www.forsakringskassan.se/privatperson/foralder/vard-av-barn-vab', '_blank', 'noopener')}
         />
         <ActionRow
-          icon={<BarChart3 size={18} />}
-          label="Öppna Mina sidor (FK)"
-          sublabel="Ansök där med siffrorna härifrån"
-          onClick={() => window.open('https://www.forsakringskassan.se/privatperson/logga-in-pa-mina-sidor', '_blank', 'noopener')}
+          icon={<Copy size={18} />}
+          label={copied ? 'Kopierat!' : 'Kopiera alla datum'}
+          sublabel="Klistra in i FK:s formulär"
+          onClick={handleCopyDates}
         />
+        <ActionRow
+          icon={<Download size={18} />}
+          label="Spara som PDF"
+          sublabel="För eget arkiv eller arbetsgivare"
+          onClick={() => window.print()}
+        />
+      </div>
+
+      <div style={{
+        marginTop: 14, padding: '14px 16px', borderRadius: 16,
+        background: C.primarySoft, color: C.primary,
+        fontSize: 12, lineHeight: 1.55,
+      }}>
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>Innan du ansöker</div>
+        <div style={{ color: C.text, opacity: 0.85 }}>
+          • Du behöver <strong>BankID</strong> och registrerad <strong>SGI</strong> hos FK<br/>
+          • <strong>Läkarintyg</strong> krävs från dag 8 av barnets sjukperiod<br/>
+          • Ansök inom <strong>90 dagar</strong> från första VAB-dagen
+        </div>
       </div>
 
       <div style={{ marginTop: 24 }}>
@@ -1807,12 +1844,22 @@ function PrintView({ children, entries, totalDays, getDaysUsed }) {
     .sort((a,b) => a.date.localeCompare(b.date));
   const now = new Date();
 
+  const months = [...new Set(rows.map(e => new Date(e.date).getMonth()))].sort((a,b) => a-b);
+  let periodLabel;
+  if (months.length === 0) {
+    periodLabel = `${MONTH_LONG[now.getMonth()]} ${thisYear}`;
+  } else if (months.length === 1) {
+    periodLabel = `${MONTH_LONG[months[0]]} ${thisYear}`;
+  } else {
+    periodLabel = `${MONTH_LONG[months[0]]}–${MONTH_LONG[months[months.length-1]]} ${thisYear}`;
+  }
+
   return (
     <div className="print-view" aria-hidden="true">
       <div className="print-head">
         <div>
           <div className="print-kicker">Vab-loggen</div>
-          <h1>Sammanställning VAB {thisYear}</h1>
+          <h1>Sammanställning VAB · {periodLabel}</h1>
         </div>
         <div className="print-meta">
           Utskriven {now.getDate()} {MONTH_SHORT[now.getMonth()]} {now.getFullYear()}<br/>
@@ -1865,7 +1912,9 @@ function PrintView({ children, entries, totalDays, getDaysUsed }) {
       </table>
 
       <div className="print-foot">
-        Underlag för ansökan hos Försäkringskassan. Kontrollera siffrorna innan inlämning.
+        Underlag för ansökan hos Försäkringskassan. Kontrollera siffrorna innan inlämning.<br/>
+        Kom ihåg: läkar-/sjuksköterskeintyg krävs från och med dag 8 av barnets sjukperiod.
+        Ansökan ska skickas in inom 90 dagar från första VAB-dagen. Du behöver en registrerad SGI hos FK.
       </div>
     </div>
   );
