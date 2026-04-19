@@ -3,6 +3,7 @@ create table if not exists children (
   name        text    not null,
   initials    text    not null,
   age         integer,
+  personal_id text,
   accent      text    not null default '#2C4A3E',
   accent_soft text    not null default '#E4ECE7',
   created_at  timestamptz default now()

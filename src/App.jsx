@@ -1106,7 +1106,8 @@ function SummaryScreen({ children, entries, totalDays, getDaysUsed, onEdit }) {
       const lines = childRows.map(e =>
         `  ${e.date}  ${extentLabel(e.extent)}`
       );
-      return `${c.name} (${c.age} år) — ${formatDays(totalDays)} dagar\n${lines.join('\n')}`;
+      const pnr = c.personal_id ? ` · ${c.personal_id}` : '';
+      return `${c.name} (${c.age} år)${pnr} — ${formatDays(totalDays)} dagar\n${lines.join('\n')}`;
     }).filter(Boolean);
 
     const header = `Underlag VAB ${thisYear} — ${formatDays(totalDays)} dagar totalt`;
@@ -1708,9 +1709,10 @@ function ChildEditorScreen({ child, existingCount, onBack, onSave, onDelete }) {
   const paletteIdx = isNew
     ? existingCount % CHILD_PALETTE.length
     : CHILD_PALETTE.findIndex(p => p.accent === child.accent);
-  const [name,    setName]    = useState(child?.name ?? '');
-  const [age,     setAge]     = useState(child?.age ?? 0);
-  const [colorIx, setColorIx] = useState(paletteIdx >= 0 ? paletteIdx : 0);
+  const [name,       setName]       = useState(child?.name ?? '');
+  const [age,        setAge]        = useState(child?.age ?? 0);
+  const [personalId, setPersonalId] = useState(child?.personal_id ?? '');
+  const [colorIx,    setColorIx]    = useState(paletteIdx >= 0 ? paletteIdx : 0);
 
   function handleSave() {
     const trimmed = name.trim();
@@ -1721,6 +1723,7 @@ function ChildEditorScreen({ child, existingCount, onBack, onSave, onDelete }) {
       name: trimmed,
       initials: initialsFromName(trimmed),
       age: Number(age) || 0,
+      personal_id: personalId.trim() || null,
       accent: palette.accent,
       accent_soft: palette.accent_soft,
     });
@@ -1790,6 +1793,25 @@ function ChildEditorScreen({ child, existingCount, onBack, onSave, onDelete }) {
           onClick={() => setAge(Math.min(18, Number(age) + 1))}
           style={ageBtnStyle}
         >+</button>
+      </div>
+
+      <SectionTitle>Personnummer (valfritt)</SectionTitle>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={personalId}
+        onChange={e => setPersonalId(e.target.value)}
+        placeholder="ÅÅÅÅMMDD-XXXX"
+        autoComplete="off"
+        style={{
+          width: '100%', padding: '12px 14px', borderRadius: 14,
+          background: C.surface, border: `1px solid ${C.borderSoft}`,
+          fontFamily: 'inherit', fontSize: 15, color: C.text, outline: 'none',
+          letterSpacing: '0.02em',
+        }}
+      />
+      <div style={{ fontSize: 11, color: C.textMuted, marginTop: 6, lineHeight: 1.4 }}>
+        Krävs för att ansöka hos Försäkringskassan. Sparas endast hos dig (och ev. delat familjehem).
       </div>
 
       <SectionTitle>Färg</SectionTitle>
@@ -1886,7 +1908,10 @@ function PrintView({ children, entries, totalDays, getDaysUsed }) {
             const n = rows.filter(r => r.child_id === c.id).length;
             return (
               <tr key={c.id}>
-                <td>{c.name} ({c.age} år)</td>
+                <td>
+                  {c.name} ({c.age} år)
+                  {c.personal_id && <div style={{fontSize:11, opacity:0.7}}>{c.personal_id}</div>}
+                </td>
                 <td>{n}</td>
                 <td style={{textAlign:'right'}}>{formatDays(getDaysUsed(c.id))}</td>
               </tr>
