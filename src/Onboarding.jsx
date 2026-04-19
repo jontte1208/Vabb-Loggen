@@ -8,10 +8,11 @@ import { requestNotificationPermission } from './lib/notifications';
 const STEPS = ['welcome', 'child', 'notify'];
 
 export default function Onboarding({ onComplete }) {
-  const [step,    setStep]    = useState(0);
-  const [leaving, setLeaving] = useState(false);
+  const [step,       setStep]       = useState(0);
+  const [leaving,    setLeaving]    = useState(false);
+  const [firstChild, setFirstChild] = useState(null);
 
-  function advance(firstChild) {
+  function advance() {
     setLeaving(true);
     setTimeout(() => {
       setLeaving(false);
@@ -30,9 +31,9 @@ export default function Onboarding({ onComplete }) {
   return (
     <div style={style}>
       <StepDots total={STEPS.length} current={step} />
-      {step === 0 && <WelcomeStep    onNext={() => advance(null)} />}
-      {step === 1 && <ChildStep      onNext={advance} />}
-      {step === 2 && <NotifyStep     onNext={() => advance(null)} />}
+      {step === 0 && <WelcomeStep onNext={advance} />}
+      {step === 1 && <ChildStep   onSetChild={setFirstChild} onNext={advance} />}
+      {step === 2 && <NotifyStep  onNext={advance} />}
     </div>
   );
 }
@@ -124,7 +125,7 @@ function WelcomeStep({ onNext }) {
 
 /* ---- Step 2: Add first child ---- */
 
-function ChildStep({ onNext }) {
+function ChildStep({ onSetChild, onNext }) {
   const [name,    setName]    = useState('');
   const [age,     setAge]     = useState(1);
   const [colorIx, setColorIx] = useState(0);
@@ -137,15 +138,19 @@ function ChildStep({ onNext }) {
   };
 
   function handleNext() {
-    if (!trimmed) { onNext(null); return; }
-    onNext({
-      id:          Date.now(),
-      name:        trimmed,
-      initials:    initialsFromName(trimmed),
-      age,
-      accent:      CHILD_PALETTE[colorIx].accent,
-      accent_soft: CHILD_PALETTE[colorIx].accent_soft,
-    });
+    if (trimmed) {
+      onSetChild({
+        id:          Date.now(),
+        name:        trimmed,
+        initials:    initialsFromName(trimmed),
+        age,
+        accent:      CHILD_PALETTE[colorIx].accent,
+        accent_soft: CHILD_PALETTE[colorIx].accent_soft,
+      });
+    } else {
+      onSetChild(null);
+    }
+    onNext();
   }
 
   return (

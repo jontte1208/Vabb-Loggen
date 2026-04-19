@@ -237,6 +237,7 @@ export default function VabLoggen() {
   }
 
   return (
+    <>
     <div
       className="app-frame-container"
       style={{
@@ -326,10 +327,11 @@ export default function VabLoggen() {
         </div>
         {session && screen === 'main' && !showOnboarding && <BottomNav tab={tab} setTab={setTab} />}
       </div>
-
-      <PrintView children={children} entries={entries}
-        totalDays={totalDaysThisYear} getDaysUsed={getDaysUsed} />
     </div>
+
+    <PrintView children={children} entries={entries}
+      totalDays={totalDaysThisYear} getDaysUsed={getDaysUsed} />
+    </>
   );
 }
 
