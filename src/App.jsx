@@ -879,7 +879,7 @@ function SectionTitle({ children }) {
 function CalendarScreen({ children, entries }) {
   const today = new Date();
   // offset = antal månader från nuvarande månad (0 = nu, -1 = förra, +1 = nästa)
-  const [offset, setOffset] = useState(-1); // visa 1 bakåt, nuvarande, 1 framåt
+  const [offset, setOffset] = useState(0);
 
   const WINDOW = 3; // antal månader som visas
   const months = Array.from({ length: WINDOW }, (_, i) => {
@@ -887,7 +887,7 @@ function CalendarScreen({ children, entries }) {
     return { year: d.getFullYear(), month: d.getMonth() };
   });
 
-  const isAtToday = offset === -1;
+  const isAtToday = offset === 0;
   const firstVisible = months[0];
   const lastVisible  = months[WINDOW - 1];
 
@@ -910,7 +910,7 @@ function CalendarScreen({ children, entries }) {
           ‹ Bakåt
         </button>
         <button
-          onClick={() => setOffset(-1)}
+          onClick={() => setOffset(0)}
           style={{
             ...navBtnStyle,
             background: isAtToday ? C.primary : C.surface,
