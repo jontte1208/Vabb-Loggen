@@ -44,6 +44,8 @@ export default function VabLoggen() {
   const [userName, setUserName] = useState('');
   const [household, setHousehold] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [summaryYear, setSummaryYear] = useState(new Date().getFullYear());
+  const [summaryMonth, setSummaryMonth] = useState(null);
   const [regChild,  setRegChild]  = useState(null);
   const [regDate,   setRegDate]   = useState(isoDate());
   const [regExtent, setRegExtent] = useState(1);
@@ -311,7 +313,9 @@ export default function VabLoggen() {
           ) : screen === 'main' ? (
             tab === 'home'    ? <HomeScreen  userName={userName} children={children} entries={entries} totalDays={totalDaysThisYear} getDaysUsed={getDaysUsed} onRegister={() => openRegister(null)} onEdit={openRegister} onSettings={() => setScreen('settings')} onAddChild={() => openChildEditor(null)} />
           : tab === 'calendar'? <CalendarScreen children={children} entries={entries} onEdit={openRegister} />
-          : <SummaryScreen children={children} entries={entries} onEdit={openRegister} onMarkMonthSubmitted={handleMarkMonthSubmitted} />
+          : <SummaryScreen children={children} entries={entries} onEdit={openRegister} onMarkMonthSubmitted={handleMarkMonthSubmitted}
+              selectedYear={summaryYear} setSelectedYear={setSummaryYear}
+              selectedMonth={summaryMonth} setSelectedMonth={setSummaryMonth} />
           ) : screen === 'settings' ? (
             <SettingsScreen
               userName={userName}
@@ -360,7 +364,7 @@ export default function VabLoggen() {
     </div>
 
     <PrintView children={children} entries={entries}
-      totalDays={totalDaysThisYear} getDaysUsed={getDaysUsed} />
+      selectedYear={summaryYear} selectedMonth={summaryMonth} />
     </>
   );
 }
@@ -1232,10 +1236,11 @@ function MonthGrid({ year, month, entries, children, today, onDayClick }) {
 
 /* ---------------- Summary screen ---------------- */
 
-function SummaryScreen({ children, entries, onEdit, onMarkMonthSubmitted }) {
+function SummaryScreen({
+  children, entries, onEdit, onMarkMonthSubmitted,
+  selectedYear, setSelectedYear, selectedMonth, setSelectedMonth,
+}) {
   const currentYear = new Date().getFullYear();
-  const [selectedYear, setSelectedYear] = useState(currentYear);
-  const [selectedMonth, setSelectedMonth] = useState(null);
   const thisYear = selectedYear;
 
   const availableYears = useMemo(() => {
@@ -2313,21 +2318,29 @@ const ageBtnStyle = {
 
 /* ---------------- Print view (PDF export) ---------------- */
 
-function PrintView({ children, entries, totalDays, getDaysUsed }) {
-  const thisYear = new Date().getFullYear();
+function PrintView({ children, entries, selectedYear, selectedMonth }) {
+  const thisYear = selectedYear ?? new Date().getFullYear();
   const rows = [...entries]
-    .filter(e => new Date(e.date).getFullYear() === thisYear)
+    .filter(e => {
+      if (Number(e.date.slice(0, 4)) !== thisYear) return false;
+      if (selectedMonth == null) return true;
+      return Number(e.date.slice(5, 7)) === selectedMonth;
+    })
     .sort((a,b) => a.date.localeCompare(b.date));
   const now = new Date();
 
-  const months = [...new Set(rows.map(e => new Date(e.date).getMonth()))].sort((a,b) => a-b);
+  const getDaysUsed = (childId) =>
+    rows.filter(r => r.child_id === childId).reduce((sum, r) => sum + r.extent, 0);
+  const totalDays = children.reduce((sum, c) => sum + getDaysUsed(c.id), 0);
+
   let periodLabel;
-  if (months.length === 0) {
-    periodLabel = `${MONTH_LONG[now.getMonth()]} ${thisYear}`;
-  } else if (months.length === 1) {
-    periodLabel = `${MONTH_LONG[months[0]]} ${thisYear}`;
+  if (selectedMonth != null) {
+    periodLabel = `${MONTH_LONG[selectedMonth - 1]} ${thisYear}`;
   } else {
-    periodLabel = `${MONTH_LONG[months[0]]}–${MONTH_LONG[months[months.length-1]]} ${thisYear}`;
+    const months = [...new Set(rows.map(e => new Date(e.date).getMonth()))].sort((a,b) => a-b);
+    if (months.length === 0) periodLabel = `${thisYear}`;
+    else if (months.length === 1) periodLabel = `${MONTH_LONG[months[0]]} ${thisYear}`;
+    else periodLabel = `${MONTH_LONG[months[0]]}–${MONTH_LONG[months[months.length-1]]} ${thisYear}`;
   }
 
   return (
@@ -2369,7 +2382,7 @@ function PrintView({ children, entries, totalDays, getDaysUsed }) {
         <thead>
           <tr>
             <th>Datum</th><th>Veckodag</th><th>Barn</th>
-            <th>Omfattning</th><th>Anledning</th>
+            <th>Omfattning</th><th>Anledning</th><th>Status</th>
           </tr>
         </thead>
         <tbody>
@@ -2384,6 +2397,7 @@ function PrintView({ children, entries, totalDays, getDaysUsed }) {
                 <td>{c?.name ?? '—'}</td>
                 <td>{extentLabel(e.extent)}</td>
                 <td>{r.label}{e.reason_note ? ` — ${e.reason_note}` : ''}</td>
+                <td>{e.submitted_at ? 'Inskickad' : '—'}</td>
               </tr>
             );
           })}
