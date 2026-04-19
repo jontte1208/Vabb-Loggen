@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Vab-loggen · Admin</title>
+  <style>
+    :root {
+      --bg: #f6f1e6;
+      --surface: #fffdf7;
+      --text: #1b1b17;
+      --muted: #7a7568;
+      --border: #e5ddc9;
+      --primary: #2c4a3e;
+      --primary-soft: #e4ece7;
+      --accent: #c97b2c;
+      --danger: #b3261e;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 32px 24px 80px; }
+    h1 { font-weight: 500; font-size: 28px; letter-spacing: -0.01em; margin: 0 0 6px; }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+      padding: 18px 20px; }
+    .grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px; margin-bottom: 20px; }
+    .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      padding: 14px 16px; }
+    .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.08em; font-weight: 600; }
+    .stat-value { font-size: 26px; font-weight: 500; margin-top: 4px; }
+    .stat-accent { color: var(--primary); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    th { background: var(--primary-soft); color: var(--primary); font-weight: 600;
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+      position: sticky; top: 0; }
+    tr:hover td { background: rgba(44,74,62,0.03); }
+    .muted { color: var(--muted); }
+    .chart { display: flex; gap: 6px; align-items: flex-end; height: 80px; }
+    .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .bar { width: 100%; background: var(--primary); border-radius: 4px 4px 0 0;
+      min-height: 2px; transition: height 200ms; }
+    .bar-label { font-size: 10px; color: var(--muted); }
+    .section { margin-top: 28px; }
+    .section h2 { font-size: 14px; font-weight: 600; letter-spacing: 0.04em;
+      text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+    .login { max-width: 360px; margin: 80px auto; }
+    .login input { width: 100%; padding: 12px 14px; border: 1px solid var(--border);
+      border-radius: 12px; font-size: 15px; background: var(--surface); margin-bottom: 10px; }
+    .login button { width: 100%; padding: 12px; border: none; border-radius: 12px;
+      background: var(--primary); color: white; font-size: 15px; font-weight: 600;
+      cursor: pointer; }
+    .login button:hover { background: #1f3a2f; }
+    .error { color: var(--danger); font-size: 13px; margin-top: 8px; }
+    .small { font-size: 11px; color: var(--muted); }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px;
+      font-weight: 600; }
+    .tag-ok { background: var(--primary-soft); color: var(--primary); }
+    .tag-mute { background: #ecebe4; color: var(--muted); }
+    .refresh { background: transparent; border: 1px solid var(--border);
+      padding: 6px 12px; border-radius: 999px; cursor: pointer; font-size: 12px; }
+    .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="app"></div>
+
+  <script>
+    const SUPABASE_PROJECT = 'uscvqcxvccixzlkhjbdo';
+    const FN_URL = `https://${SUPABASE_PROJECT}.functions.supabase.co/admin-stats`;
+    const TOKEN_KEY = 'vabb_admin_token';
+
+    function h(tag, attrs = {}, ...children) {
+      const el = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        if (k === 'class') el.className = v;
+        else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
+        else el.setAttribute(k, v);
+      }
+      for (const c of children.flat()) {
+        if (c == null || c === false) continue;
+        el.append(typeof c === 'string' || typeof c === 'number' ? document.createTextNode(String(c)) : c);
+      }
+      return el;
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return d.toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' });
+    }
+    function fmtRelative(iso) {
+      if (!iso) return '—';
+      const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+      if (diff < 60) return 'nyss';
+      if (diff < 3600) return Math.floor(diff / 60) + ' min sedan';
+      if (diff < 86400) return Math.floor(diff / 3600) + ' h sedan';
+      return Math.floor(diff / 86400) + ' d sedan';
+    }
+
+    async function fetchStats(token) {
+      const r = await fetch(FN_URL, { headers: { 'x-admin-token': token } });
+      if (r.status === 401) throw new Error('Fel lösenord.');
+      if (!r.ok) throw new Error('Kunde inte hämta data (' + r.status + ')');
+      return r.json();
+    }
+
+    function renderLogin(container, err) {
+      container.innerHTML = '';
+      const form = h('div', { class: 'login' },
+        h('h1', {}, 'Vab-loggen · Admin'),
+        h('div', { class: 'sub' }, 'Ange admin-lösenord för att fortsätta.'),
+        h('input', { id: 'pw', type: 'password', placeholder: 'ADMIN_SECRET', autofocus: '' }),
+        h('button', { onclick: handleSubmit }, 'Logga in'),
+        err ? h('div', { class: 'error' }, err) : null,
+      );
+      container.append(form);
+      const input = form.querySelector('#pw');
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleSubmit(); });
+
+      async function handleSubmit() {
+        const token = input.value.trim();
+        if (!token) return;
+        try {
+          await fetchStats(token);
+          sessionStorage.setItem(TOKEN_KEY, token);
+          boot();
+        } catch (e) { renderLogin(container, e.message); }
+      }
+    }
+
+    function renderDashboard(container, data) {
+      container.innerHTML = '';
+
+      const t = data.totals;
+      const maxSignup = Math.max(1, ...data.signups_last_7_days.map(x => x.count));
+
+      container.append(
+        h('div', { class: 'row' },
+          h('div', {},
+            h('h1', {}, 'Vab-loggen · Admin'),
+            h('div', { class: 'sub' }, 'Uppdaterad ' + fmtDate(new Date().toISOString())),
+          ),
+          h('button', { class: 'refresh', onclick: boot }, 'Uppdatera'),
+        ),
+
+        h('div', { class: 'grid-stats' },
+          stat('Användare', t.users),
+          stat('Hushåll', t.households, `${t.multi_member_households} delade`),
+          stat('Barn', t.children),
+          stat('Registreringar', t.entries, `${t.entries_last_30d} senaste 30 d`),
+          stat('Inskickade', t.entries_submitted),
+          stat('Push-prenumerationer', t.push_subscriptions),
+        ),
+
+        h('div', { class: 'section' },
+          h('h2', {}, 'Nya användare senaste 7 dagarna'),
+          h('div', { class: 'card' },
+            h('div', { class: 'chart' },
+              data.signups_last_7_days.map(d =>
+                h('div', { class: 'bar-col' },
+                  h('div', { class: 'small' }, String(d.count)),
+                  h('div', { class: 'bar', style: `height: ${(d.count / maxSignup) * 72}px` }),
+                  h('div', { class: 'bar-label' }, d.date.slice(5)),
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        h('div', { class: 'section' },
+          h('h2', {}, `Användare (${data.users.length})`),
+          h('div', { class: 'card', style: 'padding: 0; overflow: auto;' },
+            h('table', {},
+              h('thead', {},
+                h('tr', {},
+                  ['E-post', 'Provider', 'Registrerad', 'Senast inloggad', 'Hushåll', 'Barn', 'Entries', 'Push']
+                    .map(x => h('th', {}, x)),
+                ),
+              ),
+              h('tbody', {},
+                data.users.map(u =>
+                  h('tr', {},
+                    h('td', {}, u.email || h('span', { class: 'muted' }, '—')),
+                    h('td', {}, h('span', { class: 'tag tag-mute' }, u.provider || '—')),
+                    h('td', {}, h('span', { title: fmtDate(u.created_at) }, fmtRelative(u.created_at))),
+                    h('td', {}, h('span', { title: fmtDate(u.last_sign_in_at) }, fmtRelative(u.last_sign_in_at))),
+                    h('td', {}, u.household_id
+                      ? h('span', { class: 'small', title: u.household_id }, u.household_id.slice(0, 8) + '…')
+                      : h('span', { class: 'muted' }, '—')),
+                    h('td', {}, String(u.children_count)),
+                    h('td', {}, String(u.entries_count)),
+                    h('td', {}, u.push_count > 0
+                      ? h('span', { class: 'tag tag-ok' }, String(u.push_count))
+                      : h('span', { class: 'muted' }, '0')),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      function stat(label, value, sub) {
+        return h('div', { class: 'stat' },
+          h('div', { class: 'stat-label' }, label),
+          h('div', { class: 'stat-value stat-accent' }, String(value)),
+          sub ? h('div', { class: 'small' }, sub) : null,
+        );
+      }
+    }
+
+    async function boot() {
+      const app = document.getElementById('app');
+      const token = sessionStorage.getItem(TOKEN_KEY);
+      if (!token) { renderLogin(app); return; }
+      try {
+        app.innerHTML = '<div class="sub">Laddar…</div>';
+        const data = await fetchStats(token);
+        renderDashboard(app, data);
+      } catch (e) {
+        sessionStorage.removeItem(TOKEN_KEY);
+        renderLogin(app, e.message);
+      }
+    }
+
+    boot();
+  </script>
+</body>
+</html>
