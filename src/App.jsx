@@ -878,10 +878,18 @@ function SectionTitle({ children }) {
 
 function CalendarScreen({ children, entries }) {
   const today = new Date();
-  const months = [-2, -1, 0].map(delta => {
-    const d = new Date(today.getFullYear(), today.getMonth() + delta, 1);
+  // offset = antal månader från nuvarande månad (0 = nu, -1 = förra, +1 = nästa)
+  const [offset, setOffset] = useState(-1); // visa 1 bakåt, nuvarande, 1 framåt
+
+  const WINDOW = 3; // antal månader som visas
+  const months = Array.from({ length: WINDOW }, (_, i) => {
+    const d = new Date(today.getFullYear(), today.getMonth() + offset + i, 1);
     return { year: d.getFullYear(), month: d.getMonth() };
   });
+
+  const isAtToday = offset === -1;
+  const firstVisible = months[0];
+  const lastVisible  = months[WINDOW - 1];
 
   return (
     <div style={{ padding: '8px 22px 24px' }}>
@@ -890,32 +898,65 @@ function CalendarScreen({ children, entries }) {
       </div>
       <h1 style={{
         fontFamily: FONT_DISPLAY, fontSize: 32, fontWeight: 500,
-        margin: '4px 0 18px', color: C.text, letterSpacing: '-0.01em',
+        margin: '4px 0 14px', color: C.text, letterSpacing: '-0.01em',
       }}>Kalender</h1>
 
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 18 }}>
-        {children.map(c => (
-          <div key={c.id} style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            fontSize: 12, color: C.text,
-          }}>
-            <span style={{
-              width: 10, height: 10, borderRadius: '50%', background: c.accent,
-            }} />
-            {c.name}
-          </div>
-        ))}
+      {/* Navigering */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 16, gap: 8,
+      }}>
+        <button onClick={() => setOffset(o => o - 1)} style={navBtnStyle}>
+          ‹ Bakåt
+        </button>
+        <button
+          onClick={() => setOffset(-1)}
+          style={{
+            ...navBtnStyle,
+            background: isAtToday ? C.primary : C.surface,
+            color:      isAtToday ? '#fff'    : C.textMuted,
+            border:     isAtToday ? 'none'    : `1px solid ${C.borderSoft}`,
+            fontWeight: 600,
+          }}
+        >
+          Idag
+        </button>
+        <button onClick={() => setOffset(o => o + 1)} style={navBtnStyle}>
+          Framåt ›
+        </button>
       </div>
+
+      {/* Legend */}
+      {children.length > 0 && (
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 18 }}>
+          {children.map(c => (
+            <div key={c.id} style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              fontSize: 12, color: C.text,
+            }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.accent }} />
+              {c.name}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
         {months.map((m, i) => (
-          <MonthGrid key={i} year={m.year} month={m.month}
+          <MonthGrid key={`${m.year}-${m.month}`} year={m.year} month={m.month}
             entries={entries} children={children} today={today} />
         ))}
       </div>
     </div>
   );
 }
+
+const navBtnStyle = {
+  flex: 1, padding: '9px 0', borderRadius: 12,
+  background: C.surface, border: `1px solid ${C.borderSoft}`,
+  fontSize: 13, fontWeight: 500, color: C.textMuted,
+  cursor: 'pointer',
+};
 
 function MonthGrid({ year, month, entries, children, today }) {
   const first = new Date(year, month, 1);
