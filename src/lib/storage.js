@@ -206,6 +206,30 @@ export async function updateEntry(entry, currentEntries) {
   return updated;
 }
 
+export async function markMonthSubmitted(year, month, currentEntries) {
+  const prefix = `${year}-${String(month).padStart(2, '0')}`;
+  const now = new Date().toISOString();
+  const updated = currentEntries.map(e =>
+    e.date.startsWith(prefix) && !e.submitted_at ? { ...e, submitted_at: now } : e
+  );
+  writeLocal(KEYS.entries, updated);
+  if (isSupabaseConfigured) {
+    const hid = getLocalHouseholdId();
+    let q = supabase.from('entries').update({ submitted_at: now })
+      .gte('date', `${prefix}-01`).lt('date', nextMonthStart(year, month))
+      .is('submitted_at', null);
+    if (hid) q = q.eq('household_id', hid);
+    await q;
+  }
+  return updated;
+}
+
+function nextMonthStart(year, month) {
+  const y = month === 12 ? year + 1 : year;
+  const m = month === 12 ? 1 : month + 1;
+  return `${y}-${String(m).padStart(2, '0')}-01`;
+}
+
 export async function deleteEntry(entryId, currentEntries) {
   const updated = currentEntries.filter(e => e.id !== entryId);
   writeLocal(KEYS.entries, updated);

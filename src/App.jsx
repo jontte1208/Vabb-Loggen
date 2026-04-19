@@ -11,7 +11,7 @@ import {
   formatDate, extentLabel, getReasonObj, deadlineStatus, isoDate, daysSince,
 } from './lib/constants';
 import {
-  loadChildren, loadEntries, addEntry, updateEntry, deleteEntry,
+  loadChildren, loadEntries, addEntry, updateEntry, deleteEntry, markMonthSubmitted,
   addChild, updateChild, deleteChild,
   loadUserName, saveUserName,
   getHousehold, createHousehold, joinHousehold, leaveHousehold,
@@ -27,6 +27,7 @@ import {
   notificationPermission, requestNotificationPermission,
   checkDeadlineNotifications, registerServiceWorker,
 } from './lib/notifications';
+import { pushSupported, getPushSubscription, enablePush, disablePush } from './lib/push';
 
 export default function VabLoggen() {
   const [screen, setScreen]     = useState('main');
@@ -236,6 +237,11 @@ export default function VabLoggen() {
     setEditingEntryId(null);
   }
 
+  async function handleMarkMonthSubmitted(year, month) {
+    const updated = await markMonthSubmitted(year, month, entries);
+    setEntries(updated);
+  }
+
   function openChildEditor(child = null) {
     setEditingChildId(child ? child.id : 'new');
     setScreen('child');
@@ -305,7 +311,7 @@ export default function VabLoggen() {
           ) : screen === 'main' ? (
             tab === 'home'    ? <HomeScreen  userName={userName} children={children} entries={entries} totalDays={totalDaysThisYear} getDaysUsed={getDaysUsed} onRegister={() => openRegister(null)} onEdit={openRegister} onSettings={() => setScreen('settings')} onAddChild={() => openChildEditor(null)} />
           : tab === 'calendar'? <CalendarScreen children={children} entries={entries} onEdit={openRegister} />
-          : <SummaryScreen children={children} entries={entries} totalDays={totalDaysThisYear} getDaysUsed={getDaysUsed} onEdit={openRegister} />
+          : <SummaryScreen children={children} entries={entries} totalDays={totalDaysThisYear} getDaysUsed={getDaysUsed} onEdit={openRegister} onMarkMonthSubmitted={handleMarkMonthSubmitted} />
           ) : screen === 'settings' ? (
             <SettingsScreen
               userName={userName}
@@ -1226,7 +1232,7 @@ function MonthGrid({ year, month, entries, children, today, onDayClick }) {
 
 /* ---------------- Summary screen ---------------- */
 
-function SummaryScreen({ children, entries, totalDays, getDaysUsed, onEdit }) {
+function SummaryScreen({ children, entries, totalDays, getDaysUsed, onEdit, onMarkMonthSubmitted }) {
   const thisYear = new Date().getFullYear();
   const entriesThisYear = entries
     .filter(e => new Date(e.date).getFullYear() === thisYear)
@@ -1234,6 +1240,23 @@ function SummaryScreen({ children, entries, totalDays, getDaysUsed, onEdit }) {
 
   const lateCount = entries.filter(e => deadlineStatus(e.date).status === 'late').length;
   const [copied, setCopied] = useState(false);
+  const [marking, setMarking] = useState(false);
+
+  const now = new Date();
+  const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevYear  = prevMonthDate.getFullYear();
+  const prevMonth = prevMonthDate.getMonth() + 1;
+  const prevPrefix = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+  const prevUnsubmitted = entries.filter(
+    e => e.date.startsWith(prevPrefix) && !e.submitted_at
+  );
+
+  async function handleMarkPrev() {
+    if (marking || !onMarkMonthSubmitted) return;
+    setMarking(true);
+    try { await onMarkMonthSubmitted(prevYear, prevMonth); }
+    finally { setMarking(false); }
+  }
 
   async function handleCopyDates() {
     const sorted = [...entriesThisYear].sort((a,b) => a.date.localeCompare(b.date));
@@ -1346,6 +1369,14 @@ function SummaryScreen({ children, entries, totalDays, getDaysUsed, onEdit }) {
           sublabel="För eget arkiv eller arbetsgivare"
           onClick={() => window.print()}
         />
+        {prevUnsubmitted.length > 0 && (
+          <ActionRow
+            icon={<Check size={18} />}
+            label={marking ? 'Markerar…' : `Markera ${MONTH_LONG[prevMonth - 1]} som inskickad`}
+            sublabel={`${prevUnsubmitted.length} registreringar · stoppar påminnelse`}
+            onClick={handleMarkPrev}
+          />
+        )}
       </div>
 
       <div style={{
@@ -1515,6 +1546,9 @@ function SettingsScreen({
         iosNeedsInstall={iosNeedsInstall}
       />
 
+      <SectionTitle>Månadspåminnelse</SectionTitle>
+      <MonthlyPushCard iosNeedsInstall={iosNeedsInstall} />
+
       <SectionTitle>Barn</SectionTitle>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {children.map(c => {
@@ -1646,6 +1680,73 @@ function NotificationsCard({ status, onEnable, iosNeedsInstall }) {
           och tryck sedan på den här knappen.
         </div>
       )}
+    </div>
+  );
+}
+
+function MonthlyPushCard({ iosNeedsInstall }) {
+  const [enabled, setEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!pushSupported()) { if (alive) setLoading(false); return; }
+      const sub = await getPushSubscription();
+      if (alive) { setEnabled(!!sub); setLoading(false); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  if (!pushSupported()) {
+    return (
+      <InfoBanner
+        tone="muted"
+        icon={<BellOff size={18} />}
+        title="Push-notiser stöds inte"
+        body={iosNeedsInstall
+          ? 'Lägg först till appen på hemskärmen, öppna den därifrån, och försök igen.'
+          : 'Den här webbläsaren stödjer inte push-notiser.'}
+      />
+    );
+  }
+
+  async function handleToggle() {
+    setError(''); setLoading(true);
+    try {
+      if (enabled) { await disablePush();  setEnabled(false); }
+      else         { await enablePush();   setEnabled(true);  }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div>
+      <button
+        onClick={handleToggle}
+        disabled={loading}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+          padding: '14px 16px', borderRadius: 16,
+          background: enabled ? C.primarySoft : C.primary,
+          color: enabled ? C.primary : '#fff',
+          fontSize: 14, fontWeight: 600,
+        }}
+      >
+        <Bell size={18} />
+        <span style={{ flex: 1, textAlign: 'left' }}>
+          {loading ? 'Laddar…' : enabled ? 'Månadspåminnelse på' : 'Slå på månadspåminnelse'}
+        </span>
+        {enabled && <Check size={16} />}
+      </button>
+      <div style={{ marginTop: 8, fontSize: 12, color: C.textMuted, lineHeight: 1.45 }}>
+        Du får en notis den 1:a varje månad om du har VAB-dagar att skicka in till Försäkringskassan.
+      </div>
+      {error && <div style={{ marginTop: 8, fontSize: 12, color: '#9A3F21' }}>{error}</div>}
     </div>
   );
 }
