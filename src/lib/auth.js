@@ -21,15 +21,6 @@ export async function signIn(email, password) {
   return data;
 }
 
-export async function signInWithMagicLink(email) {
-  if (!isSupabaseConfigured) throw new Error('Kräver Supabase');
-  const { error } = await supabase.auth.signInWithOtp({
-    email: email.trim(),
-    options: { emailRedirectTo: window.location.origin },
-  });
-  if (error) throw new Error(friendlyAuthError(error));
-}
-
 export async function signOut() {
   if (!isSupabaseConfigured) return;
   await supabase.auth.signOut();
