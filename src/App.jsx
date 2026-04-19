@@ -75,7 +75,21 @@ export default function VabLoggen() {
       if (metaHid) {
         try { localStorage.setItem('vab-loggen.household_id', metaHid); } catch {}
       }
-      const [c, e] = await Promise.all([loadChildren(), loadEntries()]);
+      let [c, e] = await Promise.all([loadChildren(), loadEntries()]);
+
+      // Auto-create household on first login so data syncs across devices.
+      // Uploads any existing local children/entries into the new household.
+      if (!metaHid) {
+        try {
+          const h = await createHousehold(c, e);
+          await setUserHousehold(h.id);
+          [c, e] = await Promise.all([loadChildren(), loadEntries()]);
+        } catch (err) {
+          // Non-fatal: fall through with local-only data
+          console.warn('Auto-create household failed:', err);
+        }
+      }
+
       setChildren(c);
       setEntries(e);
       setRegChild(c[0]?.id ?? null);
