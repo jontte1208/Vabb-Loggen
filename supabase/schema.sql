@@ -6,6 +6,7 @@ create table if not exists children (
   personal_id text,
   accent      text    not null default '#2C4A3E',
   accent_soft text    not null default '#E4ECE7',
+  avatar_url  text,
   created_at  timestamptz default now()
 );
 

@@ -691,15 +691,28 @@ function PrimaryButton({ children, onClick, style }) {
 }
 
 function Avatar({ child, size = 40 }) {
+  if (child?.avatar_url) {
+    return (
+      <img
+        src={child.avatar_url}
+        alt={child.name ?? ''}
+        style={{
+          width: size, height: size, borderRadius: '50%',
+          objectFit: 'cover', flexShrink: 0,
+          border: `2px solid ${child.accent}`,
+        }}
+      />
+    );
+  }
   return (
     <div style={{
       width: size, height: size, borderRadius: '50%',
-      background: child.accent, color: '#fff',
+      background: child?.accent ?? C.primary, color: '#fff',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontSize: size * 0.38, fontWeight: 600, letterSpacing: '0.02em',
       flexShrink: 0,
     }}>
-      {child.initials}
+      {child?.initials ?? '?'}
     </div>
   );
 }
@@ -1829,6 +1842,46 @@ function InfoBanner({ tone, icon, title, body }) {
 
 /* ---------------- Child editor ---------------- */
 
+function compressImage(file, maxSize = 320, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Kunde inte läsa filen.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Ogiltig bildfil.'));
+      img.onload = () => {
+        const { width, height } = img;
+        const scale = Math.min(1, maxSize / Math.max(width, height));
+        const w = Math.round(width * scale);
+        const h = Math.round(height * scale);
+        const side = Math.min(w, h);
+        const sx = (w - side) / 2;
+        const sy = (h - side) / 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = side;
+        canvas.height = side;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        // Re-draw cropped to square for consistent sizing
+        const square = document.createElement('canvas');
+        square.width = side;
+        square.height = side;
+        const sctx = square.getContext('2d');
+        const tmp = new Image();
+        tmp.onload = () => {
+          sctx.drawImage(tmp, sx, sy, side, side, 0, 0, side, side);
+          resolve(square.toDataURL('image/jpeg', quality));
+        };
+        tmp.onerror = () => resolve(dataUrl);
+        tmp.src = dataUrl;
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function ChildEditorScreen({ child, existingCount, onBack, onSave, onDelete }) {
   const isNew = !child;
   const paletteIdx = isNew
@@ -1838,6 +1891,23 @@ function ChildEditorScreen({ child, existingCount, onBack, onSave, onDelete }) {
   const [age,        setAge]        = useState(child?.age ?? 0);
   const [personalId, setPersonalId] = useState(child?.personal_id ?? '');
   const [colorIx,    setColorIx]    = useState(paletteIdx >= 0 ? paletteIdx : 0);
+  const [avatarUrl,  setAvatarUrl]  = useState(child?.avatar_url ?? null);
+  const [uploading,  setUploading]  = useState(false);
+
+  async function handlePickPhoto(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    try {
+      const dataUrl = await compressImage(file, 320, 0.82);
+      setAvatarUrl(dataUrl);
+    } catch (err) {
+      alert('Kunde inte läsa bilden: ' + err.message);
+    } finally {
+      setUploading(false);
+    }
+  }
 
   function handleSave() {
     const trimmed = name.trim();
@@ -1851,6 +1921,7 @@ function ChildEditorScreen({ child, existingCount, onBack, onSave, onDelete }) {
       personal_id: personalId.trim() || null,
       accent: palette.accent,
       accent_soft: palette.accent_soft,
+      avatar_url: avatarUrl,
     });
   }
 
@@ -1859,6 +1930,7 @@ function ChildEditorScreen({ child, existingCount, onBack, onSave, onDelete }) {
     initials: initialsFromName(name || '??'),
     accent: CHILD_PALETTE[colorIx].accent,
     accent_soft: CHILD_PALETTE[colorIx].accent_soft,
+    avatar_url: avatarUrl,
   };
 
   return (
@@ -1883,6 +1955,39 @@ function ChildEditorScreen({ child, existingCount, onBack, onSave, onDelete }) {
         <div>
           <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>{preview.name}</div>
           <div style={{ fontSize: 12, color: C.textMuted }}>{age || 0} år</div>
+        </div>
+      </div>
+
+      <SectionTitle>Profilbild (valfritt)</SectionTitle>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 4 }}>
+        <Avatar child={preview} size={64} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            padding: '9px 14px', borderRadius: 12,
+            background: C.surface, border: `1px solid ${C.borderSoft}`,
+            fontSize: 13, fontWeight: 500, color: C.text, cursor: 'pointer',
+          }}>
+            {uploading ? 'Laddar…' : avatarUrl ? 'Byt bild' : 'Välj bild'}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handlePickPhoto}
+              style={{ display: 'none' }}
+            />
+          </label>
+          {avatarUrl && (
+            <button
+              type="button"
+              onClick={() => setAvatarUrl(null)}
+              style={{
+                background: 'transparent', border: 'none', padding: 0,
+                color: C.textMuted, fontSize: 12, textAlign: 'left', cursor: 'pointer',
+              }}
+            >
+              Ta bort bild
+            </button>
+          )}
         </div>
       </div>
 
