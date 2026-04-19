@@ -1056,26 +1056,31 @@ function DayDetailOverlay({ detail, children, onClose, onEdit }) {
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, background: 'rgba(20,20,20,0.45)',
-        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-        zIndex: 100,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 100, padding: 20,
       }}
     >
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          width: '100%', maxWidth: 420, background: C.bg,
-          borderTopLeftRadius: 22, borderTopRightRadius: 22,
-          padding: '20px 22px 26px', maxHeight: '70vh', overflowY: 'auto',
+          width: '100%', maxWidth: 340, background: C.bg,
+          borderRadius: 20,
+          padding: '20px 22px 22px', maxHeight: '70vh', overflowY: 'auto',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
         }}
       >
         <div style={{
-          width: 40, height: 4, borderRadius: 2, background: C.borderSoft,
-          margin: '0 auto 16px',
-        }} />
-        <div style={{
-          fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 500,
-          color: C.text, marginBottom: 14,
-        }}>{formatDate(detail.date)}</div>
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          marginBottom: 14,
+        }}>
+          <div style={{
+            fontFamily: FONT_DISPLAY, fontSize: 20, fontWeight: 500, color: C.text,
+          }}>{formatDate(detail.date)}</div>
+          <button onClick={onClose} style={{
+            background: 'transparent', border: 'none', color: C.textMuted,
+            fontSize: 20, lineHeight: 1, cursor: 'pointer', padding: 4,
+          }}>×</button>
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {detail.entries.map(e => {
             const c = children.find(x => x.id === e.child_id);
