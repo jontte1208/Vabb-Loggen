@@ -1099,11 +1099,21 @@ function SummaryScreen({ children, entries, totalDays, getDaysUsed, onEdit }) {
 
   async function handleCopyDates() {
     const sorted = [...entriesThisYear].sort((a,b) => a.date.localeCompare(b.date));
-    const lines = sorted.map(e => {
-      const c = children.find(x => x.id === e.child_id);
-      return `${e.date}  ${extentLabel(e.extent)}  ${c?.name ?? ''}`.trim();
-    });
-    const text = lines.join('\n') || 'Inga registreringar i år.';
+    const blocks = children.map(c => {
+      const childRows = sorted.filter(e => e.child_id === c.id);
+      if (childRows.length === 0) return null;
+      const totalDays = childRows.reduce((sum, e) => sum + (e.extent / 8), 0);
+      const lines = childRows.map(e =>
+        `  ${e.date}  ${extentLabel(e.extent)}`
+      );
+      return `${c.name} (${c.age} år) — ${formatDays(totalDays)} dagar\n${lines.join('\n')}`;
+    }).filter(Boolean);
+
+    const header = `Underlag VAB ${thisYear} — ${formatDays(totalDays)} dagar totalt`;
+    const text = blocks.length
+      ? `${header}\n\n${blocks.join('\n\n')}`
+      : 'Inga registreringar i år.';
+
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
