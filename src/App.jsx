@@ -17,7 +17,11 @@ import {
   isOnboarded, markOnboarded,
 } from './lib/storage';
 import Onboarding from './Onboarding.jsx';
+import Auth from './Auth.jsx';
 import { isSupabaseConfigured } from './lib/supabase';
+import {
+  getSession, onAuthChange, signOut, setUserHousehold,
+} from './lib/auth';
 import {
   notificationPermission, requestNotificationPermission,
   checkDeadlineNotifications, registerServiceWorker,
@@ -29,6 +33,8 @@ export default function VabLoggen() {
   const [children, setChildren] = useState([]);
   const [entries, setEntries]   = useState([]);
   const [loading, setLoading]   = useState(true);
+  const [session, setSession]   = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   const [editingEntryId, setEditingEntryId] = useState(null);
   const [editingChildId, setEditingChildId] = useState(null);
@@ -51,8 +57,23 @@ export default function VabLoggen() {
   }, []);
 
   useEffect(() => {
+    getSession().then(s => {
+      setSession(s);
+      setAuthChecked(true);
+    });
+    const { data } = onAuthChange(s => setSession(s));
+    return () => data?.subscription?.unsubscribe?.();
+  }, []);
+
+  useEffect(() => {
+    if (!session) { setLoading(false); return; }
     async function init() {
+      setLoading(true);
       registerServiceWorker();
+      const metaHid = session.user?.user_metadata?.household_id;
+      if (metaHid) {
+        try { localStorage.setItem('vab-loggen.household_id', metaHid); } catch {}
+      }
       const [c, e] = await Promise.all([loadChildren(), loadEntries()]);
       setChildren(c);
       setEntries(e);
@@ -66,7 +87,21 @@ export default function VabLoggen() {
       checkDeadlineNotifications(e, c);
     }
     init();
-  }, []);
+  }, [session?.user?.id]);
+
+  async function handleSignOut() {
+    await signOut();
+    try {
+      localStorage.removeItem('vab-loggen.household_id');
+      localStorage.removeItem('vab-loggen.children');
+      localStorage.removeItem('vab-loggen.entries');
+    } catch {}
+    setChildren([]);
+    setEntries([]);
+    setHousehold(null);
+    setScreen('main');
+    setTab('home');
+  }
 
   function handleUserNameChange(name) {
     setUserName(name);
@@ -75,6 +110,7 @@ export default function VabLoggen() {
 
   async function handleCreateHousehold() {
     const h = await createHousehold(children, entries);
+    await setUserHousehold(h.id);
     setHousehold(h);
     const fresh = await Promise.all([loadChildren(), loadEntries()]);
     setChildren(fresh[0]);
@@ -83,6 +119,7 @@ export default function VabLoggen() {
 
   async function handleJoinHousehold(code) {
     const h = await joinHousehold(code);
+    await setUserHousehold(h.id);
     setHousehold(h);
     const fresh = await Promise.all([loadChildren(), loadEntries()]);
     setChildren(fresh[0]);
@@ -101,6 +138,7 @@ export default function VabLoggen() {
 
   async function handleLeaveHousehold() {
     await leaveHousehold();
+    await setUserHousehold(null);
     setHousehold(null);
   }
 
@@ -232,7 +270,11 @@ export default function VabLoggen() {
       >
         <StatusBar />
         <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto' }}>
-          {loading ? (
+          {!authChecked ? (
+            <div style={{ padding: 40, textAlign: 'center', color: C.textMuted }}>Laddar…</div>
+          ) : !session ? (
+            <Auth onAuthed={() => {}} />
+          ) : loading ? (
             <div style={{ padding: 40, textAlign: 'center', color: C.textMuted }}>Laddar…</div>
           ) : showOnboarding ? (
             <Onboarding onComplete={handleOnboardingComplete} />
@@ -255,6 +297,8 @@ export default function VabLoggen() {
               onCreateHousehold={handleCreateHousehold}
               onJoinHousehold={handleJoinHousehold}
               onLeaveHousehold={handleLeaveHousehold}
+              userEmail={session?.user?.email}
+              onSignOut={handleSignOut}
             />
           ) : screen === 'child' ? (
             <ChildEditorScreen
@@ -280,7 +324,7 @@ export default function VabLoggen() {
             />
           )}
         </div>
-        {screen === 'main' && !showOnboarding && <BottomNav tab={tab} setTab={setTab} />}
+        {session && screen === 'main' && !showOnboarding && <BottomNav tab={tab} setTab={setTab} />}
       </div>
 
       <PrintView children={children} entries={entries}
@@ -1208,6 +1252,7 @@ function SettingsScreen({
   children, entries, notifStatus, onEnableNotifications,
   onEditChild, onAddChild, onBack,
   household, onCreateHousehold, onJoinHousehold, onLeaveHousehold,
+  userEmail, onSignOut,
 }) {
   const [nameInput, setNameInput] = useState(userName);
   const [nameSaved, setNameSaved] = useState(false);
@@ -1321,6 +1366,37 @@ function SettingsScreen({
           <UserPlus size={18} /> Lägg till barn
         </button>
       </div>
+
+      {userEmail && (
+        <>
+          <SectionTitle>Konto</SectionTitle>
+          <div style={{
+            background: C.surface, borderRadius: 14,
+            border: `1px solid ${C.borderSoft}`,
+            padding: '12px 14px', marginBottom: 10,
+          }}>
+            <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 2 }}>Inloggad som</div>
+            <div style={{ fontSize: 14, color: C.text, fontWeight: 500, wordBreak: 'break-all' }}>
+              {userEmail}
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              if (confirm('Logga ut? Din data förblir sparad och synkas tillbaka när du loggar in igen.')) {
+                onSignOut();
+              }
+            }}
+            style={{
+              width: '100%', padding: '12px 16px', borderRadius: 14,
+              background: 'transparent', color: '#9A3F21',
+              border: '1px solid #E7A58E', fontSize: 13, fontWeight: 500,
+              cursor: 'pointer', fontFamily: FONT_SANS,
+            }}
+          >
+            Logga ut
+          </button>
+        </>
+      )}
     </div>
   );
 }
