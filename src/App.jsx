@@ -271,34 +271,27 @@ export default function VabLoggen() {
       className="app-frame-container"
       style={{
         minHeight: '100vh',
-        background: C.bg,
+        background: C.cream,
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'stretch',
         justifyContent: 'center',
-        padding: '16px',
         fontFamily: FONT_SANS,
-        backgroundImage:
-          'radial-gradient(circle at 20% 10%, rgba(44,74,62,0.06), transparent 40%),' +
-          'radial-gradient(circle at 80% 90%, rgba(201,123,44,0.05), transparent 45%)',
       }}
     >
       <div
         className="app-frame"
         style={{
           width: '100%',
-          maxWidth: 400,
-          height: 780,
+          maxWidth: 440,
+          minHeight: '100vh',
           background: C.cream,
-          borderRadius: 36,
-          border: `1px solid ${C.border}`,
-          boxShadow: '0 30px 60px -20px rgba(44,74,62,0.35), 0 12px 24px -12px rgba(27,27,23,0.18)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
           position: 'relative',
         }}
       >
-        <StatusBar />
+        {isStandalonePWA() && <StatusBar />}
         <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto' }}>
           {!authChecked ? (
             <div style={{ padding: 40, textAlign: 'center', color: C.textMuted }}>Laddar…</div>
@@ -366,6 +359,14 @@ export default function VabLoggen() {
 }
 
 /* ---------------- Status bar ---------------- */
+
+function isStandalonePWA() {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.matchMedia?.('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true
+  );
+}
 
 function StatusBar() {
   const now = new Date();
