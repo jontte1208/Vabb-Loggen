@@ -283,7 +283,7 @@
                   h('td', {}, h('span', { title: fmtDate(u.created_at) }, fmtRelative(u.created_at))),
                   h('td', {}, h('span', { title: fmtDate(u.last_sign_in_at) }, fmtRelative(u.last_sign_in_at))),
                   h('td', {}, u.household_id
-                    ? h('span', { class: 'code', title: u.household_id }, u.household_id.slice(0, 8) + '…')
+                    ? h('span', { title: u.household_id }, u.household_name || h('span', { class: 'code' }, u.household_id.slice(0, 8) + '…'))
                     : h('span', { class: 'muted' }, '—')),
                   h('td', {}, String(u.children_count)),
                   h('td', {}, String(u.entries_count)),
