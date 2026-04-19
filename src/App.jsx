@@ -1483,14 +1483,14 @@ function SummaryScreen({
         />
         <ActionRow
           icon={<Copy size={18} />}
-          label={copied ? 'Kopierat!' : 'Kopiera datum'}
-          sublabel="Välj månad eller hela året"
+          label={copied ? 'Kopierat!' : 'Kopiera som text'}
+          sublabel="Kopierar dina VAB-datum — klistra in direkt hos FK"
           onClick={() => setPickerAction('copy')}
         />
         <ActionRow
           icon={<Download size={18} />}
-          label="Spara som PDF"
-          sublabel="Välj månad eller hela året"
+          label="Ladda ner som PDF"
+          sublabel="Öppnar utskrift — välj 'Spara som PDF' i dialogen"
           onClick={() => setPickerAction('pdf')}
         />
         {canMark && (
@@ -1570,7 +1570,7 @@ function SummaryScreen({
 
       {pickerAction && (
         <PeriodPickerModal
-          title={pickerAction === 'copy' ? 'Kopiera datum' : 'Spara som PDF'}
+          action={pickerAction}
           year={thisYear}
           monthsWithEntries={monthsWithEntries}
           onPick={handlePickerSelect}
@@ -1581,7 +1581,13 @@ function SummaryScreen({
   );
 }
 
-function PeriodPickerModal({ title, year, monthsWithEntries, onPick, onClose }) {
+function PeriodPickerModal({ action, year, monthsWithEntries, onPick, onClose }) {
+  const isCopy = action === 'copy';
+  const title = isCopy ? 'Kopiera som text' : 'Ladda ner som PDF';
+  const hint = isCopy
+    ? 'Texten kopieras till urklipp. Klistra sedan in den i ansökan hos Försäkringskassan eller skicka den till din arbetsgivare.'
+    : 'Utskriftsdialogen öppnas. Välj "Spara som PDF" (eller "Skriv ut till PDF") som skrivare för att spara filen på din enhet.';
+
   return (
     <div
       onClick={onClose}
@@ -1601,7 +1607,7 @@ function PeriodPickerModal({ title, year, monthsWithEntries, onPick, onClose }) 
       >
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          marginBottom: 14,
+          marginBottom: 10,
         }}>
           <div style={{ fontFamily: FONT_DISPLAY, fontSize: 20, fontWeight: 500, color: C.text }}>
             {title}
@@ -1611,8 +1617,15 @@ function PeriodPickerModal({ title, year, monthsWithEntries, onPick, onClose }) 
             color: C.textMuted, fontSize: 20, lineHeight: 1,
           }} aria-label="Stäng">×</button>
         </div>
-        <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 10 }}>
-          Välj period för {year}
+        <div style={{
+          fontSize: 12, color: C.textMuted, marginBottom: 14,
+          background: C.primarySoft, borderRadius: 10, padding: '10px 12px',
+          lineHeight: 1.55,
+        }}>
+          {hint}
+        </div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+          Välj period
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <PeriodPickerRow label={`Hela året (${year})`} onClick={() => onPick(year, null)} />
