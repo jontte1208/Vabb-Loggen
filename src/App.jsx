@@ -1235,6 +1235,7 @@ function MonthGrid({ year, month, entries, children, today, onDayClick }) {
 function SummaryScreen({ children, entries, onEdit, onMarkMonthSubmitted }) {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedMonth, setSelectedMonth] = useState(null);
   const thisYear = selectedYear;
 
   const availableYears = useMemo(() => {
@@ -1246,54 +1247,63 @@ function SummaryScreen({ children, entries, onEdit, onMarkMonthSubmitted }) {
   const minYear = availableYears[availableYears.length - 1];
   const maxYear = Math.max(...availableYears);
 
-  const entriesThisYear = entries
-    .filter(e => new Date(e.date).getFullYear() === thisYear)
+  const monthsWithEntries = useMemo(() => {
+    const set = new Set();
+    entries.forEach(e => {
+      if (Number(e.date.slice(0, 4)) === thisYear) set.add(Number(e.date.slice(5, 7)));
+    });
+    return [...set].sort((a, b) => a - b);
+  }, [entries, thisYear]);
+
+  const matchesPeriod = (e) => {
+    if (Number(e.date.slice(0, 4)) !== thisYear) return false;
+    if (selectedMonth == null) return true;
+    return Number(e.date.slice(5, 7)) === selectedMonth;
+  };
+
+  const entriesInPeriod = entries
+    .filter(matchesPeriod)
     .sort((a,b) => b.date.localeCompare(a.date));
 
-  const daysUsedForYear = (childId) =>
-    entries
-      .filter(e => e.child_id === childId && new Date(e.date).getFullYear() === thisYear)
+  const getDaysUsed = (childId) =>
+    entries.filter(e => e.child_id === childId && matchesPeriod(e))
       .reduce((sum, e) => sum + e.extent, 0);
-  const getDaysUsed = daysUsedForYear;
-  const totalDays = children.reduce((sum, c) => sum + daysUsedForYear(c.id), 0);
+  const totalDays = children.reduce((sum, c) => sum + getDaysUsed(c.id), 0);
 
-  const lateCount = entriesThisYear.filter(e => deadlineStatus(e.date).status === 'late').length;
+  const lateCount = entriesInPeriod.filter(e => deadlineStatus(e.date).status === 'late').length;
   const [copied, setCopied] = useState(false);
   const [marking, setMarking] = useState(false);
 
-  const now = new Date();
-  const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prevYear  = prevMonthDate.getFullYear();
-  const prevMonth = prevMonthDate.getMonth() + 1;
-  const prevPrefix = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
-  const prevUnsubmitted = entries.filter(
-    e => e.date.startsWith(prevPrefix) && !e.submitted_at
-  );
+  const periodLabel = selectedMonth == null
+    ? `${thisYear}`
+    : `${MONTH_LONG[selectedMonth - 1]} ${thisYear}`;
+  const periodUnsubmitted = entriesInPeriod.filter(e => !e.submitted_at);
+  const canMark = selectedMonth != null && periodUnsubmitted.length > 0;
 
-  async function handleMarkPrev() {
-    if (marking || !onMarkMonthSubmitted) return;
+  async function handleMarkPeriod() {
+    if (marking || !canMark || !onMarkMonthSubmitted) return;
     setMarking(true);
-    try { await onMarkMonthSubmitted(prevYear, prevMonth); }
+    try { await onMarkMonthSubmitted(thisYear, selectedMonth); }
     finally { setMarking(false); }
   }
 
   async function handleCopyDates() {
-    const sorted = [...entriesThisYear].sort((a,b) => a.date.localeCompare(b.date));
+    const sorted = [...entriesInPeriod].sort((a,b) => a.date.localeCompare(b.date));
     const blocks = children.map(c => {
       const childRows = sorted.filter(e => e.child_id === c.id);
       if (childRows.length === 0) return null;
-      const totalDays = childRows.reduce((sum, e) => sum + e.extent, 0);
+      const childTotal = childRows.reduce((sum, e) => sum + e.extent, 0);
       const lines = childRows.map(e =>
-        `  ${e.date}  ${extentLabel(e.extent)}`
+        `  ${e.date}  ${extentLabel(e.extent)}${e.submitted_at ? '  ✓ inskickad' : ''}`
       );
       const pnr = c.personal_id ? ` · ${c.personal_id}` : '';
-      return `${c.name} (${c.age} år)${pnr} — ${formatDays(totalDays)} dagar\n${lines.join('\n')}`;
+      return `${c.name} (${c.age} år)${pnr} — ${formatDays(childTotal)} dagar\n${lines.join('\n')}`;
     }).filter(Boolean);
 
-    const header = `Underlag VAB ${thisYear} — ${formatDays(totalDays)} dagar totalt`;
+    const header = `Underlag VAB · ${periodLabel} — ${formatDays(totalDays)} dagar totalt`;
     const text = blocks.length
       ? `${header}\n\n${blocks.join('\n\n')}`
-      : 'Inga registreringar i år.';
+      : `Inga registreringar för ${periodLabel}.`;
 
     try {
       await navigator.clipboard.writeText(text);
@@ -1357,6 +1367,19 @@ function SummaryScreen({ children, entries, onEdit, onMarkMonthSubmitted }) {
         </div>
       </div>
 
+      <div className="no-scrollbar" style={{
+        display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2, marginBottom: 14,
+      }}>
+        <MonthChip active={selectedMonth == null} onClick={() => setSelectedMonth(null)}>
+          Hela året
+        </MonthChip>
+        {monthsWithEntries.map(m => (
+          <MonthChip key={m} active={selectedMonth === m} onClick={() => setSelectedMonth(m)}>
+            {MONTH_SHORT[m - 1]}
+          </MonthChip>
+        ))}
+      </div>
+
       <div style={{
         position: 'relative', background: C.primary, color: '#fff',
         borderRadius: 22, padding: '22px 24px', overflow: 'hidden',
@@ -1370,7 +1393,7 @@ function SummaryScreen({ children, entries, onEdit, onMarkMonthSubmitted }) {
           borderRadius: '50%', background: 'rgba(255,255,255,0.05)',
         }} />
         <div style={{ position: 'relative' }}>
-          <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 500 }}>{thisYear}</div>
+          <div style={{ fontSize: 12, opacity: 0.8, fontWeight: 500 }}>{periodLabel}</div>
           <div style={{
             fontFamily: FONT_DISPLAY, fontSize: 48, fontWeight: 500,
             lineHeight: 1, marginTop: 4,
@@ -1391,7 +1414,7 @@ function SummaryScreen({ children, entries, onEdit, onMarkMonthSubmitted }) {
 
       <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
         {children.map(c => {
-          const childEntries = entriesThisYear.filter(e => e.child_id === c.id);
+          const childEntries = entriesInPeriod.filter(e => e.child_id === c.id);
           return (
             <div key={c.id} style={{
               display: 'flex', alignItems: 'center', gap: 14,
@@ -1421,22 +1444,22 @@ function SummaryScreen({ children, entries, onEdit, onMarkMonthSubmitted }) {
         />
         <ActionRow
           icon={<Copy size={18} />}
-          label={copied ? 'Kopierat!' : 'Kopiera alla datum'}
+          label={copied ? 'Kopierat!' : `Kopiera datum för ${periodLabel}`}
           sublabel="Klistra in i FK:s formulär"
           onClick={handleCopyDates}
         />
         <ActionRow
           icon={<Download size={18} />}
-          label="Spara som PDF"
+          label={`Spara ${periodLabel} som PDF`}
           sublabel="För eget arkiv eller arbetsgivare"
           onClick={() => window.print()}
         />
-        {prevUnsubmitted.length > 0 && (
+        {canMark && (
           <ActionRow
             icon={<Check size={18} />}
-            label={marking ? 'Markerar…' : `Markera ${MONTH_LONG[prevMonth - 1]} som inskickad`}
-            sublabel={`${prevUnsubmitted.length} registreringar · stoppar påminnelse`}
-            onClick={handleMarkPrev}
+            label={marking ? 'Markerar…' : `Markera ${MONTH_LONG[selectedMonth - 1]} som inskickad`}
+            sublabel={`${periodUnsubmitted.length} registreringar · stoppar påminnelse`}
+            onClick={handleMarkPeriod}
           />
         )}
       </div>
@@ -1463,7 +1486,7 @@ function SummaryScreen({ children, entries, onEdit, onMarkMonthSubmitted }) {
           background: C.surface, borderRadius: 16,
           border: `1px solid ${C.borderSoft}`, overflow: 'hidden',
         }}>
-          {entriesThisYear.map((e, i) => {
+          {entriesInPeriod.map((e, i) => {
             const c = children.find(x => x.id === e.child_id);
             const r = getReasonObj(e.reason);
             const dl = deadlineStatus(e.date);
@@ -1473,7 +1496,7 @@ function SummaryScreen({ children, entries, onEdit, onMarkMonthSubmitted }) {
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: '11px 14px', width: '100%', textAlign: 'left',
                 background: 'transparent',
-                borderBottom: i < entriesThisYear.length - 1
+                borderBottom: i < entriesInPeriod.length - 1
                   ? `1px solid ${C.borderSoft}` : 'none',
               }}>
                 <span style={{
@@ -1486,7 +1509,17 @@ function SummaryScreen({ children, entries, onEdit, onMarkMonthSubmitted }) {
                   </div>
                   <div style={{ fontSize: 11, color: C.textMuted }}>{r.label}</div>
                 </div>
-                <DeadlineBadge dl={dl} />
+                {e.submitted_at ? (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    fontSize: 10, fontWeight: 600, color: C.primary,
+                    background: C.primarySoft, padding: '3px 7px', borderRadius: 999,
+                  }}>
+                    <Check size={10} /> inskickad
+                  </span>
+                ) : (
+                  <DeadlineBadge dl={dl} />
+                )}
                 <div style={{ fontSize: 12, fontWeight: 500, color: C.text, marginLeft: 8 }}>
                   {formatDays(e.extent)}
                 </div>
@@ -1496,6 +1529,24 @@ function SummaryScreen({ children, entries, onEdit, onMarkMonthSubmitted }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function MonthChip({ active, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flexShrink: 0, padding: '7px 14px', borderRadius: 999,
+        border: `1px solid ${active ? C.primary : C.borderSoft}`,
+        background: active ? C.primary : C.surface,
+        color: active ? '#fff' : C.text,
+        fontSize: 12, fontWeight: 600, cursor: 'pointer',
+        transition: 'background 120ms, color 120ms, border-color 120ms',
+      }}
+    >
+      {children}
+    </button>
   );
 }
 
