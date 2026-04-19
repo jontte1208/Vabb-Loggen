@@ -1,0 +1,14 @@
+{
+  "name": "Vab-loggen",
+  "short_name": "Vab-loggen",
+  "description": "Logga VAB-dagar och få påminnelser innan ansökan går ut.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F2EBDB",
+  "theme_color": "#2C4A3E",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
