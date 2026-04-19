@@ -1998,6 +1998,10 @@ function SharingCard({ household, onCreate, onJoin, onLeave, onUpdateName }) {
   const [nameSaved, setNameSaved] = useState(false);
   const [nameSaving, setNameSaving] = useState(false);
 
+  useEffect(() => {
+    if (household?.name && !nameSaved) setNameInput(household.name);
+  }, [household?.name]);
+
   if (!isSupabaseConfigured) {
     return (
       <InfoBanner
