@@ -112,6 +112,14 @@ export async function leaveHousehold() {
   setLocalHouseholdId(null);
 }
 
+export async function updateHouseholdName(name) {
+  if (!isSupabaseConfigured) throw new Error('Kräver Supabase');
+  const id = getLocalHouseholdId();
+  if (!id) throw new Error('Inget hushåll kopplat.');
+  const { error } = await supabase.from('households').update({ name }).eq('id', id);
+  if (error) throw new Error('Kunde inte spara namnet.');
+}
+
 /* ---------- children ---------- */
 
 export async function loadChildren() {

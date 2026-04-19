@@ -14,7 +14,7 @@ import {
   loadChildren, loadEntries, addEntry, updateEntry, deleteEntry, markMonthSubmitted,
   addChild, updateChild, deleteChild,
   loadUserName, saveUserName,
-  getHousehold, createHousehold, joinHousehold, leaveHousehold,
+  getHousehold, createHousehold, joinHousehold, leaveHousehold, updateHouseholdName,
   isOnboarded, markOnboarded,
 } from './lib/storage';
 import Onboarding from './Onboarding.jsx';
@@ -331,6 +331,7 @@ export default function VabLoggen() {
               onCreateHousehold={handleCreateHousehold}
               onJoinHousehold={handleJoinHousehold}
               onLeaveHousehold={handleLeaveHousehold}
+              onUpdateHouseholdName={async (name) => { await updateHouseholdName(name); setHousehold(h => ({ ...h, name })); }}
               userEmail={session?.user?.email}
               onSignOut={handleSignOut}
             />
@@ -1705,7 +1706,7 @@ function SettingsScreen({
   userName, onUserNameChange,
   children, entries, notifStatus, onEnableNotifications,
   onEditChild, onAddChild, onBack,
-  household, onCreateHousehold, onJoinHousehold, onLeaveHousehold,
+  household, onCreateHousehold, onJoinHousehold, onLeaveHousehold, onUpdateHouseholdName,
   userEmail, onSignOut,
 }) {
   const [nameInput, setNameInput] = useState(userName);
@@ -1772,6 +1773,7 @@ function SettingsScreen({
         onCreate={onCreateHousehold}
         onJoin={onJoinHousehold}
         onLeave={onLeaveHousehold}
+        onUpdateName={onUpdateHouseholdName}
       />
 
       <SectionTitle>Notiser</SectionTitle>
@@ -1986,12 +1988,15 @@ function MonthlyPushCard({ iosNeedsInstall }) {
   );
 }
 
-function SharingCard({ household, onCreate, onJoin, onLeave }) {
+function SharingCard({ household, onCreate, onJoin, onLeave, onUpdateName }) {
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining]   = useState(false);
   const [creating, setCreating] = useState(false);
   const [copied, setCopied]     = useState(false);
   const [error, setError]       = useState('');
+  const [nameInput, setNameInput] = useState(household?.name || '');
+  const [nameSaved, setNameSaved] = useState(false);
+  const [nameSaving, setNameSaving] = useState(false);
 
   if (!isSupabaseConfigured) {
     return (
@@ -2029,9 +2034,48 @@ function SharingCard({ household, onCreate, onJoin, onLeave }) {
     } catch {}
   }
 
+  async function handleSaveName() {
+    if (!nameInput.trim()) return;
+    setNameSaving(true);
+    try {
+      await onUpdateName(nameInput.trim());
+      setNameSaved(true);
+      setTimeout(() => setNameSaved(false), 1800);
+    } catch (e) { setError(e.message); }
+    finally { setNameSaving(false); }
+  }
+
   if (household) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            type="text"
+            value={nameInput}
+            onChange={e => { setNameInput(e.target.value); setNameSaved(false); }}
+            onKeyDown={e => e.key === 'Enter' && handleSaveName()}
+            placeholder="Hushållsnamn, t.ex. Familjen Nilsson"
+            style={{
+              flex: 1, padding: '12px 14px', borderRadius: 14,
+              background: C.surface, border: `1px solid ${C.borderSoft}`,
+              fontFamily: 'inherit', fontSize: 15, color: C.text, outline: 'none',
+            }}
+          />
+          <button
+            onClick={handleSaveName}
+            disabled={nameSaving}
+            style={{
+              padding: '12px 18px', borderRadius: 14,
+              background: nameSaved ? C.primarySoft : C.primary,
+              color: nameSaved ? C.primary : '#fff',
+              fontSize: 14, fontWeight: 600,
+              transition: 'all 200ms', display: 'flex', alignItems: 'center', gap: 6,
+              opacity: nameSaving ? 0.6 : 1,
+            }}
+          >
+            {nameSaved ? <><Check size={15} /> Sparat</> : 'Spara'}
+          </button>
+        </div>
         <div style={{
           background: C.primarySoft, borderRadius: 16, padding: '16px',
         }}>
