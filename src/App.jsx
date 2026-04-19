@@ -47,6 +47,7 @@ export default function VabLoggen() {
   const [regDate,   setRegDate]   = useState(isoDate());
   const [regExtent, setRegExtent] = useState(1);
   const [regReason, setRegReason] = useState('feber');
+  const [regReasonNote, setRegReasonNote] = useState('');
   const [showSaved, setShowSaved] = useState(false);
 
   useEffect(() => {
@@ -192,12 +193,14 @@ export default function VabLoggen() {
       setRegDate(entry.date);
       setRegExtent(entry.extent);
       setRegReason(entry.reason);
+      setRegReasonNote(entry.reason_note ?? '');
     } else {
       setEditingEntryId(null);
       setRegChild(children[0]?.id ?? null);
       setRegDate(isoDate());
       setRegExtent(1);
       setRegReason('feber');
+      setRegReasonNote('');
     }
     setScreen('register');
   }
@@ -209,6 +212,7 @@ export default function VabLoggen() {
       date:     regDate,
       extent:   regExtent,
       reason:   regReason,
+      reason_note: regReason === 'annat' ? (regReasonNote.trim() || null) : null,
     };
     const updated = editingEntryId
       ? await updateEntry(entry, entries)
@@ -300,7 +304,7 @@ export default function VabLoggen() {
             <Onboarding onComplete={handleOnboardingComplete} />
           ) : screen === 'main' ? (
             tab === 'home'    ? <HomeScreen  userName={userName} children={children} entries={entries} totalDays={totalDaysThisYear} getDaysUsed={getDaysUsed} onRegister={() => openRegister(null)} onEdit={openRegister} onSettings={() => setScreen('settings')} onAddChild={() => openChildEditor(null)} />
-          : tab === 'calendar'? <CalendarScreen children={children} entries={entries} />
+          : tab === 'calendar'? <CalendarScreen children={children} entries={entries} onEdit={openRegister} />
           : <SummaryScreen children={children} entries={entries} totalDays={totalDaysThisYear} getDaysUsed={getDaysUsed} onEdit={openRegister} />
           ) : screen === 'settings' ? (
             <SettingsScreen
@@ -336,6 +340,7 @@ export default function VabLoggen() {
               regDate={regDate}     setRegDate={setRegDate}
               regExtent={regExtent} setRegExtent={setRegExtent}
               regReason={regReason} setRegReason={setRegReason}
+              regReasonNote={regReasonNote} setRegReasonNote={setRegReasonNote}
               onBack={() => { setScreen('main'); setEditingEntryId(null); }}
               onSave={handleSave}
               onDelete={handleDelete}
@@ -717,7 +722,9 @@ function formatDays(n) {
 function RegisterScreen({
   isEditing, children, regChild, setRegChild,
   regDate, setRegDate, regExtent, setRegExtent,
-  regReason, setRegReason, onBack, onSave, onDelete,
+  regReason, setRegReason,
+  regReasonNote, setRegReasonNote,
+  onBack, onSave, onDelete,
   showSaved, getDaysUsed,
 }) {
   if (showSaved) {
@@ -858,6 +865,21 @@ function RegisterScreen({
         })}
       </div>
 
+      {regReason === 'annat' && (
+        <input
+          type="text"
+          value={regReasonNote}
+          onChange={e => setRegReasonNote(e.target.value)}
+          placeholder="Beskriv anledningen"
+          maxLength={120}
+          style={{
+            marginTop: 10, width: '100%', padding: '12px 14px', borderRadius: 14,
+            background: C.surface, border: `1px solid ${C.borderSoft}`,
+            fontFamily: 'inherit', fontSize: 14, color: C.text, outline: 'none',
+          }}
+        />
+      )}
+
       {selectedChild && (
         <div style={{
           marginTop: 22, background: selectedChild.accent_soft,
@@ -941,7 +963,8 @@ function SectionTitle({ children }) {
 
 /* ---------------- Calendar screen ---------------- */
 
-function CalendarScreen({ children, entries }) {
+function CalendarScreen({ children, entries, onEdit }) {
+  const [dayDetail, setDayDetail] = useState(null); // { date, entries }
   const today = new Date();
   // offset = antal månader från nuvarande månad (0 = nu, -1 = förra, +1 = nästa)
   const [offset, setOffset] = useState(0);
@@ -1009,8 +1032,79 @@ function CalendarScreen({ children, entries }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
         {months.map((m, i) => (
           <MonthGrid key={`${m.year}-${m.month}`} year={m.year} month={m.month}
-            entries={entries} children={children} today={today} />
+            entries={entries} children={children} today={today}
+            onDayClick={(dateStr, dayEntries) => setDayDetail({ date: dateStr, entries: dayEntries })}
+          />
         ))}
+      </div>
+
+      {dayDetail && (
+        <DayDetailOverlay
+          detail={dayDetail}
+          children={children}
+          onClose={() => setDayDetail(null)}
+          onEdit={(e) => { setDayDetail(null); onEdit(e); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function DayDetailOverlay({ detail, children, onClose, onEdit }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(20,20,20,0.45)',
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        zIndex: 100,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: '100%', maxWidth: 420, background: C.bg,
+          borderTopLeftRadius: 22, borderTopRightRadius: 22,
+          padding: '20px 22px 26px', maxHeight: '70vh', overflowY: 'auto',
+        }}
+      >
+        <div style={{
+          width: 40, height: 4, borderRadius: 2, background: C.borderSoft,
+          margin: '0 auto 16px',
+        }} />
+        <div style={{
+          fontFamily: FONT_DISPLAY, fontSize: 22, fontWeight: 500,
+          color: C.text, marginBottom: 14,
+        }}>{formatDate(detail.date)}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {detail.entries.map(e => {
+            const c = children.find(x => x.id === e.child_id);
+            const r = getReasonObj(e.reason);
+            return (
+              <button
+                key={e.id}
+                onClick={() => onEdit(e)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '12px 14px', borderRadius: 14,
+                  background: c?.accent_soft ?? C.surface,
+                  border: `1px solid ${C.borderSoft}`,
+                  textAlign: 'left',
+                }}
+              >
+                <Avatar child={c} size={36} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>
+                    {c?.name ?? '—'} · {extentLabel(e.extent)}
+                  </div>
+                  <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+                    {r.emoji} {r.label}{e.reason_note ? ` — ${e.reason_note}` : ''}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -1023,7 +1117,7 @@ const navBtnStyle = {
   cursor: 'pointer',
 };
 
-function MonthGrid({ year, month, entries, children, today }) {
+function MonthGrid({ year, month, entries, children, today, onDayClick }) {
   const first = new Date(year, month, 1);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const startOffset = (first.getDay() + 6) % 7;
@@ -1070,14 +1164,22 @@ function MonthGrid({ year, month, entries, children, today }) {
           if (d === null) return <div key={i} />;
           const dayEntries = entriesByDay.get(d) || [];
           const todayCell = isToday(d);
+          const hasEntries = dayEntries.length > 0;
+          const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
           return (
-            <div key={i} style={{
-              aspectRatio: '1', borderRadius: 10, position: 'relative',
-              background: todayCell ? C.primary : 'transparent',
-              color: todayCell ? '#fff' : C.text,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: todayCell ? 600 : 500,
-            }}>
+            <button
+              key={i}
+              onClick={hasEntries ? () => onDayClick(dateStr, dayEntries) : undefined}
+              disabled={!hasEntries}
+              style={{
+                aspectRatio: '1', borderRadius: 10, position: 'relative',
+                background: todayCell ? C.primary : 'transparent',
+                color: todayCell ? '#fff' : C.text,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, fontWeight: todayCell ? 600 : 500,
+                border: 'none', padding: 0,
+                cursor: hasEntries ? 'pointer' : 'default',
+              }}>
               <span>{d}</span>
               {dayEntries.length > 0 && (
                 <div style={{
@@ -1096,7 +1198,7 @@ function MonthGrid({ year, month, entries, children, today }) {
                   })}
                 </div>
               )}
-            </div>
+            </button>
           );
         })}
       </div>
@@ -1957,7 +2059,7 @@ function PrintView({ children, entries, totalDays, getDaysUsed }) {
                 <td>{DAY_NAMES[d.getDay()]}</td>
                 <td>{c?.name ?? '—'}</td>
                 <td>{extentLabel(e.extent)}</td>
-                <td>{r.label}</td>
+                <td>{r.label}{e.reason_note ? ` — ${e.reason_note}` : ''}</td>
               </tr>
             );
           })}

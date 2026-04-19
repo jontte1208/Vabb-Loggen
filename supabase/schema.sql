@@ -15,6 +15,7 @@ create table if not exists entries (
   date       date    not null,
   extent     numeric(3,2) not null check (extent in (0.25, 0.5, 0.75, 1)),
   reason     text,
+  reason_note text,
   created_at timestamptz default now()
 );
 
