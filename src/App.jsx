@@ -84,7 +84,11 @@ export default function VabLoggen() {
       const h = await getHousehold();
       setHousehold(h);
       setLoading(false);
-      if (!isOnboarded()) setShowOnboarding(true);
+      if (c.length > 0) {
+        markOnboarded();
+      } else if (!isOnboarded()) {
+        setShowOnboarding(true);
+      }
       checkDeadlineNotifications(e, c);
     }
     init();

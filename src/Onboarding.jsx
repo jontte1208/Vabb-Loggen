@@ -231,7 +231,7 @@ function ChildStep({ onSetChild, onNext }) {
         </div>
       </div>
 
-      <BigButton onClick={handleNext} disabled={!trimmed}>
+      <BigButton onClick={handleNext}>
         {trimmed ? `Lägg till ${trimmed}` : 'Hoppa över'} <ArrowRight size={18} />
       </BigButton>
     </div>
