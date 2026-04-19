@@ -1292,10 +1292,32 @@ function SummaryScreen({
     finally { setMarking(false); }
   }
 
-  async function handleCopyDates() {
-    const sorted = [...entriesInPeriod].sort((a,b) => a.date.localeCompare(b.date));
+  const [pickerAction, setPickerAction] = useState(null);
+  const [pendingPrint, setPendingPrint] = useState(false);
+
+  useEffect(() => {
+    if (!pendingPrint) return;
+    const id = requestAnimationFrame(() => {
+      window.print();
+      setPendingPrint(false);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [pendingPrint]);
+
+  async function copyForPeriod(year, month) {
+    const rows = entries
+      .filter(e => {
+        if (Number(e.date.slice(0, 4)) !== year) return false;
+        if (month == null) return true;
+        return Number(e.date.slice(5, 7)) === month;
+      })
+      .sort((a,b) => a.date.localeCompare(b.date));
+
+    const label = month == null ? `${year}` : `${MONTH_LONG[month - 1]} ${year}`;
+    const total = rows.reduce((sum, e) => sum + e.extent, 0);
+
     const blocks = children.map(c => {
-      const childRows = sorted.filter(e => e.child_id === c.id);
+      const childRows = rows.filter(e => e.child_id === c.id);
       if (childRows.length === 0) return null;
       const childTotal = childRows.reduce((sum, e) => sum + e.extent, 0);
       const lines = childRows.map(e =>
@@ -1305,10 +1327,8 @@ function SummaryScreen({
       return `${c.name} (${c.age} år)${pnr} — ${formatDays(childTotal)} dagar\n${lines.join('\n')}`;
     }).filter(Boolean);
 
-    const header = `Underlag VAB · ${periodLabel} — ${formatDays(totalDays)} dagar totalt`;
-    const text = blocks.length
-      ? `${header}\n\n${blocks.join('\n\n')}`
-      : `Inga registreringar för ${periodLabel}.`;
+    const header = `Underlag VAB · ${label} — ${formatDays(total)} dagar totalt`;
+    const text = blocks.length ? `${header}\n\n${blocks.join('\n\n')}` : `Inga registreringar för ${label}.`;
 
     try {
       await navigator.clipboard.writeText(text);
@@ -1317,6 +1337,19 @@ function SummaryScreen({
     } catch {
       setCopied(false);
     }
+  }
+
+  function printForPeriod(year, month) {
+    setSelectedYear(year);
+    setSelectedMonth(month);
+    setPendingPrint(true);
+  }
+
+  async function handlePickerSelect(year, month) {
+    const action = pickerAction;
+    setPickerAction(null);
+    if (action === 'copy') await copyForPeriod(year, month);
+    else if (action === 'pdf') printForPeriod(year, month);
   }
 
   return (
@@ -1449,15 +1482,15 @@ function SummaryScreen({
         />
         <ActionRow
           icon={<Copy size={18} />}
-          label={copied ? 'Kopierat!' : `Kopiera datum för ${periodLabel}`}
-          sublabel="Klistra in i FK:s formulär"
-          onClick={handleCopyDates}
+          label={copied ? 'Kopierat!' : 'Kopiera datum'}
+          sublabel="Välj månad eller hela året"
+          onClick={() => setPickerAction('copy')}
         />
         <ActionRow
           icon={<Download size={18} />}
-          label={`Spara ${periodLabel} som PDF`}
-          sublabel="För eget arkiv eller arbetsgivare"
-          onClick={() => window.print()}
+          label="Spara som PDF"
+          sublabel="Välj månad eller hela året"
+          onClick={() => setPickerAction('pdf')}
         />
         {canMark && (
           <ActionRow
@@ -1533,7 +1566,91 @@ function SummaryScreen({
           })}
         </div>
       </div>
+
+      {pickerAction && (
+        <PeriodPickerModal
+          title={pickerAction === 'copy' ? 'Kopiera datum' : 'Spara som PDF'}
+          year={thisYear}
+          monthsWithEntries={monthsWithEntries}
+          onPick={handlePickerSelect}
+          onClose={() => setPickerAction(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function PeriodPickerModal({ title, year, monthsWithEntries, onPick, onClose }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(27,27,23,0.55)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 50, padding: 20,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: C.cream, borderRadius: 20, padding: '20px 20px 16px',
+          maxWidth: 340, width: '100%',
+          boxShadow: '0 20px 40px -10px rgba(27,27,23,0.35)',
+        }}
+      >
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          marginBottom: 14,
+        }}>
+          <div style={{ fontFamily: FONT_DISPLAY, fontSize: 20, fontWeight: 500, color: C.text }}>
+            {title}
+          </div>
+          <button onClick={onClose} style={{
+            width: 28, height: 28, borderRadius: '50%', background: 'transparent',
+            color: C.textMuted, fontSize: 20, lineHeight: 1,
+          }} aria-label="Stäng">×</button>
+        </div>
+        <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 10 }}>
+          Välj period för {year}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <PeriodPickerRow label={`Hela året (${year})`} onClick={() => onPick(year, null)} />
+          {monthsWithEntries.map(m => (
+            <PeriodPickerRow
+              key={m}
+              label={`${MONTH_LONG[m - 1]} ${year}`}
+              onClick={() => onPick(year, m)}
+            />
+          ))}
+          {monthsWithEntries.length === 0 && (
+            <div style={{ fontSize: 12, color: C.textMuted, padding: '8px 0' }}>
+              Inga registreringar i {year}.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PeriodPickerRow({ label, onClick }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 14px', borderRadius: 12,
+        background: hover ? C.primarySoft : C.surface,
+        border: `1px solid ${C.borderSoft}`, width: '100%', textAlign: 'left',
+        transition: 'background 120ms',
+      }}
+    >
+      <span style={{ fontSize: 14, fontWeight: 500, color: C.text }}>{label}</span>
+      <ArrowRight size={16} color={C.textMuted} />
+    </button>
   );
 }
 
