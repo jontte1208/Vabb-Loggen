@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Mail, Lock, ArrowRight, Check } from 'lucide-react';
 import { C, FONT_DISPLAY, FONT_SANS } from './lib/constants';
-import { signUp, signIn, resetPassword } from './lib/auth';
+import { signUp, signIn, resetPassword, signInWithGoogle } from './lib/auth';
 
 export default function Auth({ onAuthed }) {
   const [mode, setMode]         = useState('login'); // 'login' | 'signup'
@@ -34,6 +34,12 @@ export default function Auth({ onAuthed }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleGoogle() {
+    setError(''); setInfo(''); setLoading(true);
+    try { await signInWithGoogle(); }
+    catch (err) { setError(err.message); setLoading(false); }
   }
 
   async function handleForgot() {
@@ -69,6 +75,31 @@ export default function Auth({ onAuthed }) {
           <p style={{ fontSize: 14, color: C.textMuted, margin: 0 }}>
             {mode === 'signup' ? 'Skapa ett konto för att komma igång.' : 'Välkommen tillbaka.'}
           </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleGoogle}
+          disabled={loading}
+          style={{
+            width: '100%', padding: '14px', borderRadius: 14,
+            background: '#fff', color: '#1F1F1F',
+            border: `1px solid ${C.borderSoft}`,
+            fontSize: 14, fontWeight: 600, fontFamily: FONT_SANS,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+            marginBottom: 14, cursor: loading ? 'default' : 'pointer',
+          }}
+        >
+          <GoogleIcon /> Fortsätt med Google
+        </button>
+
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          color: C.textMuted, fontSize: 12, marginBottom: 14,
+        }}>
+          <div style={{ flex: 1, height: 1, background: C.borderSoft }} />
+          eller
+          <div style={{ flex: 1, height: 1, background: C.borderSoft }} />
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -141,6 +172,17 @@ export default function Auth({ onAuthed }) {
         )}
       </div>
     </div>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84a10.1 10.1 0 0 1-4.38 6.63v5.5h7.08c4.14-3.81 6.58-9.43 6.58-16.14z"/>
+      <path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.36l-7.08-5.5c-1.97 1.32-4.49 2.1-7.48 2.1-5.75 0-10.62-3.88-12.36-9.1H4.35v5.71A21.99 21.99 0 0 0 24 46z"/>
+      <path fill="#FBBC05" d="M11.64 28.14A13.23 13.23 0 0 1 10.94 24c0-1.44.25-2.84.7-4.14v-5.71H4.35A22 22 0 0 0 2 24c0 3.55.85 6.91 2.35 9.85l7.29-5.71z"/>
+      <path fill="#EA4335" d="M24 10.75c3.24 0 6.16 1.11 8.45 3.3l6.33-6.33C34.91 4.13 29.93 2 24 2A21.99 21.99 0 0 0 4.35 14.15l7.29 5.71C13.38 14.63 18.25 10.75 24 10.75z"/>
+    </svg>
   );
 }
 
