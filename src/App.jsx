@@ -311,7 +311,7 @@ export default function VabLoggen() {
           ) : screen === 'main' ? (
             tab === 'home'    ? <HomeScreen  userName={userName} children={children} entries={entries} totalDays={totalDaysThisYear} getDaysUsed={getDaysUsed} onRegister={() => openRegister(null)} onEdit={openRegister} onSettings={() => setScreen('settings')} onAddChild={() => openChildEditor(null)} />
           : tab === 'calendar'? <CalendarScreen children={children} entries={entries} onEdit={openRegister} />
-          : <SummaryScreen children={children} entries={entries} totalDays={totalDaysThisYear} getDaysUsed={getDaysUsed} onEdit={openRegister} onMarkMonthSubmitted={handleMarkMonthSubmitted} />
+          : <SummaryScreen children={children} entries={entries} onEdit={openRegister} onMarkMonthSubmitted={handleMarkMonthSubmitted} />
           ) : screen === 'settings' ? (
             <SettingsScreen
               userName={userName}
@@ -1232,13 +1232,32 @@ function MonthGrid({ year, month, entries, children, today, onDayClick }) {
 
 /* ---------------- Summary screen ---------------- */
 
-function SummaryScreen({ children, entries, totalDays, getDaysUsed, onEdit, onMarkMonthSubmitted }) {
-  const thisYear = new Date().getFullYear();
+function SummaryScreen({ children, entries, onEdit, onMarkMonthSubmitted }) {
+  const currentYear = new Date().getFullYear();
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const thisYear = selectedYear;
+
+  const availableYears = useMemo(() => {
+    const years = new Set(entries.map(e => Number(e.date.slice(0, 4))));
+    years.add(currentYear);
+    return [...years].sort((a, b) => b - a);
+  }, [entries, currentYear]);
+
+  const minYear = availableYears[availableYears.length - 1];
+  const maxYear = Math.max(...availableYears);
+
   const entriesThisYear = entries
     .filter(e => new Date(e.date).getFullYear() === thisYear)
     .sort((a,b) => b.date.localeCompare(a.date));
 
-  const lateCount = entries.filter(e => deadlineStatus(e.date).status === 'late').length;
+  const daysUsedForYear = (childId) =>
+    entries
+      .filter(e => e.child_id === childId && new Date(e.date).getFullYear() === thisYear)
+      .reduce((sum, e) => sum + e.extent, 0);
+  const getDaysUsed = daysUsedForYear;
+  const totalDays = children.reduce((sum, c) => sum + daysUsedForYear(c.id), 0);
+
+  const lateCount = entriesThisYear.filter(e => deadlineStatus(e.date).status === 'late').length;
   const [copied, setCopied] = useState(false);
   const [marking, setMarking] = useState(false);
 
@@ -1290,10 +1309,53 @@ function SummaryScreen({ children, entries, totalDays, getDaysUsed, onEdit, onMa
       <div style={{ color: C.textMuted, fontSize: 13, fontWeight: 500 }}>
         För Försäkringskassan
       </div>
-      <h1 style={{
-        fontFamily: FONT_DISPLAY, fontSize: 30, fontWeight: 500,
-        margin: '4px 0 18px', color: C.text, letterSpacing: '-0.01em',
-      }}>Sammanställning</h1>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        margin: '4px 0 18px', gap: 12,
+      }}>
+        <h1 style={{
+          fontFamily: FONT_DISPLAY, fontSize: 30, fontWeight: 500,
+          color: C.text, letterSpacing: '-0.01em', margin: 0,
+        }}>Sammanställning</h1>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 2,
+          background: C.surface, border: `1px solid ${C.borderSoft}`,
+          borderRadius: 999, padding: 2,
+        }}>
+          <button
+            onClick={() => setSelectedYear(y => Math.max(minYear, y - 1))}
+            disabled={selectedYear <= minYear}
+            style={{
+              width: 30, height: 30, borderRadius: '50%', background: 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: selectedYear <= minYear ? C.textMuted : C.text,
+              opacity: selectedYear <= minYear ? 0.35 : 1,
+              cursor: selectedYear <= minYear ? 'default' : 'pointer',
+            }}
+            aria-label="Föregående år"
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <div style={{
+            fontSize: 14, fontWeight: 600, color: C.text,
+            minWidth: 44, textAlign: 'center',
+          }}>{selectedYear}</div>
+          <button
+            onClick={() => setSelectedYear(y => Math.min(maxYear, y + 1))}
+            disabled={selectedYear >= maxYear}
+            style={{
+              width: 30, height: 30, borderRadius: '50%', background: 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: selectedYear >= maxYear ? C.textMuted : C.text,
+              opacity: selectedYear >= maxYear ? 0.35 : 1,
+              cursor: selectedYear >= maxYear ? 'default' : 'pointer',
+            }}
+            aria-label="Nästa år"
+          >
+            <ArrowRight size={16} />
+          </button>
+        </div>
+      </div>
 
       <div style={{
         position: 'relative', background: C.primary, color: '#fff',
